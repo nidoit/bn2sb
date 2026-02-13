@@ -100,8 +100,13 @@ fn interactive_setup(cfg: &mut Config) {
         process::exit(0);
     }
 
-    // Step 2: Set hostname
-    if cfg.install.hostname.is_empty() || cfg.install.hostname == "blunux" {
+    // Step 2: Set hostname (skip if loaded from config.toml)
+    if cfg.loaded_from_file && !cfg.install.hostname.is_empty() {
+        tui::print_info(&format!(
+            "Hostname: {} (from config.toml)",
+            cfg.install.hostname
+        ));
+    } else {
         println!();
         let default = if cfg.install.hostname.is_empty() {
             "blunux"
@@ -109,26 +114,21 @@ fn interactive_setup(cfg: &mut Config) {
             &cfg.install.hostname
         };
         cfg.install.hostname = tui::input_prompt("Hostname / 호스트명", default);
-    } else {
-        tui::print_info(&format!(
-            "Hostname: {} (from config.toml)",
-            cfg.install.hostname
-        ));
     }
 
-    // Step 3: Set username
-    if cfg.install.username.is_empty() || cfg.install.username == "user" {
+    // Step 3: Set username (skip if loaded from config.toml)
+    if cfg.loaded_from_file && !cfg.install.username.is_empty() {
+        tui::print_info(&format!(
+            "Username: {} (from config.toml)",
+            cfg.install.username
+        ));
+    } else {
         let default = if cfg.install.username.is_empty() {
             "user"
         } else {
             &cfg.install.username
         };
         cfg.install.username = tui::input_prompt("Username / 사용자명", default);
-    } else {
-        tui::print_info(&format!(
-            "Username: {} (from config.toml)",
-            cfg.install.username
-        ));
     }
 
     // Step 4: Set passwords
@@ -159,8 +159,8 @@ fn interactive_setup(cfg: &mut Config) {
         tui::print_info("Passwords: configured (from config.toml)");
     }
 
-    // Step 5: Timezone selection
-    if cfg.locale.timezone.is_empty() || cfg.locale.timezone == "UTC" {
+    // Step 5: Timezone selection (skip if loaded from config.toml)
+    if !cfg.loaded_from_file && (cfg.locale.timezone.is_empty() || cfg.locale.timezone == "UTC") {
         println!();
         let tz_options = [
             "Asia/Seoul",
@@ -181,8 +181,8 @@ fn interactive_setup(cfg: &mut Config) {
         ));
     }
 
-    // Step 6: Keyboard layout
-    if cfg.locale.keyboards.is_empty() {
+    // Step 6: Keyboard layout (skip if loaded from config.toml)
+    if !cfg.loaded_from_file && cfg.locale.keyboards.is_empty() {
         println!();
         let kb_options = [
             "us - US English",
@@ -203,8 +203,8 @@ fn interactive_setup(cfg: &mut Config) {
         ));
     }
 
-    // Step 7: Kernel selection
-    let kernel_is_configured = !cfg.kernel.type_.is_empty() && cfg.kernel.type_ != "linux";
+    // Step 7: Kernel selection (skip if loaded from config.toml)
+    let kernel_is_configured = cfg.loaded_from_file && !cfg.kernel.type_.is_empty();
     if !kernel_is_configured {
         println!();
         let kernel_options = [
@@ -252,12 +252,12 @@ fn interactive_setup(cfg: &mut Config) {
         cfg.disk.swap.label()
     ));
 
-    // Step 10: Input method
+    // Step 10: Input method (skip if loaded from config.toml)
     let has_lang = |prefix: &str| -> bool {
         cfg.locale.languages.iter().any(|l| l.contains(prefix))
     };
     let is_cjk_locale = has_lang("ko") || has_lang("ja") || has_lang("zh");
-    let im_already_configured = !cfg.input_method.engine.is_empty();
+    let im_already_configured = cfg.loaded_from_file && !cfg.input_method.engine.is_empty();
 
     if is_cjk_locale && !im_already_configured {
         println!();

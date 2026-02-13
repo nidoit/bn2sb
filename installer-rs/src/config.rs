@@ -190,6 +190,9 @@ pub struct Config {
     pub disk: DiskConfig,
     pub packages: PackagesConfig,
     pub install: InstallConfig,
+    /// True when config was successfully loaded from a TOML file.
+    /// When true, all fields are trusted and interactive prompts are skipped.
+    pub loaded_from_file: bool,
 }
 
 impl Default for Config {
@@ -202,6 +205,7 @@ impl Default for Config {
             disk: DiskConfig::default(),
             packages: PackagesConfig::default(),
             install: InstallConfig::default(),
+            loaded_from_file: false,
         }
     }
 }
@@ -550,6 +554,7 @@ impl Config {
             }
         }
 
+        cfg.loaded_from_file = true;
         Ok(cfg)
     }
 
