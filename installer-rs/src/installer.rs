@@ -780,13 +780,12 @@ if ! command -v yay &> /dev/null; then
     echo "  Installing yay AUR helper"
     echo "=========================================="
     sudo pacman -S --needed --noconfirm base-devel git
-    cd /tmp
-    rm -rf yay-bin
-    git clone https://aur.archlinux.org/yay-bin.git
-    cd yay-bin
+    BUILDDIR=$(mktemp -d)
+    git clone https://aur.archlinux.org/yay-bin.git "$BUILDDIR/yay-bin"
+    cd "$BUILDDIR/yay-bin"
     makepkg -si --noconfirm
-    cd ..
-    rm -rf yay-bin
+    cd /
+    rm -rf "$BUILDDIR"
     echo ""
 fi
 
@@ -865,13 +864,12 @@ echo "Installing kime-git..."
 # Check if yay is installed
 if ! command -v yay &> /dev/null; then
     echo "Installing yay first..."
-    cd /tmp
-    rm -rf yay-bin
-    git clone https://aur.archlinux.org/yay-bin.git
-    cd yay-bin
+    BUILDDIR=$(mktemp -d)
+    git clone https://aur.archlinux.org/yay-bin.git "$BUILDDIR/yay-bin"
+    cd "$BUILDDIR/yay-bin"
     makepkg -si --noconfirm
-    cd ..
-    rm -rf yay-bin
+    cd /
+    rm -rf "$BUILDDIR"
 fi
 
 # Install kime-git
@@ -902,13 +900,12 @@ echo "=========================================="
 # Check if yay is installed
 if ! command -v yay &> /dev/null; then
     echo "Installing yay first..."
-    cd /tmp
-    rm -rf yay-bin
-    git clone https://aur.archlinux.org/yay-bin.git
-    cd yay-bin
+    BUILDDIR=$(mktemp -d)
+    git clone https://aur.archlinux.org/yay-bin.git "$BUILDDIR/yay-bin"
+    cd "$BUILDDIR/yay-bin"
     makepkg -si --noconfirm
-    cd ..
-    rm -rf yay-bin
+    cd /
+    rm -rf "$BUILDDIR"
 fi
 
 # Install linux-cachyos kernel (BORE scheduler)
