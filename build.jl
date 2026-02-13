@@ -296,50 +296,54 @@ end
 """
     build_installer_step()
 
-Build the C++ installer before creating the LiveOS.
+Build the Rust installer before creating the LiveOS.
+Falls back to legacy C++ build if Rust toolchain is unavailable.
 Returns the path to the compiled binary, or nothing if build fails.
 """
 function build_installer_step()
     script_dir = dirname(@__FILE__)
-    installer_dir = joinpath(script_dir, "installer")
 
-    if !isdir(installer_dir)
-        print_warn("Installer source directory not found: $installer_dir")
+    # Primary: Rust installer
+    rust_dir = joinpath(script_dir, "installer-rs")
+    # Fallback: Legacy C++ installer
+    cpp_dir = joinpath(script_dir, "installer")
+
+    if isdir(rust_dir) && isfile(joinpath(rust_dir, "Cargo.toml"))
+        # Try Rust build
+        if !success(`which cargo`) || !success(`which rustc`)
+            println()
+            println("$(YELLOW)┌─────────────────────────────────────────────────────────────┐$(RESET)")
+            println("$(YELLOW)│  Rust 인스톨러를 빌드할 수 없습니다 (Rust 툴체인 누락)      │$(RESET)")
+            println("$(YELLOW)├─────────────────────────────────────────────────────────────┤$(RESET)")
+            println("$(YELLOW)│$(RESET)  설치 방법: $(GREEN)curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh$(RESET)")
+            println("$(YELLOW)│$(RESET)  또는: $(GREEN)sudo pacman -S rust$(RESET)")
+            println("$(YELLOW)│$(RESET)  ")
+            println("$(YELLOW)│$(RESET)  C++ 폴백 빌드를 시도합니다...")
+            println("$(YELLOW)└─────────────────────────────────────────────────────────────┘$(RESET)")
+            println()
+
+            # Try C++ fallback
+            if isdir(cpp_dir) && isfile(joinpath(cpp_dir, "CMakeLists.txt"))
+                if success(`which cmake`) && success(`which g++`)
+                    print_info("Building legacy C++ installer (fallback)...")
+                    return build_installer(cpp_dir, "Release")
+                end
+            end
+
+            print_warn("No installer could be built. archinstall will be used as fallback.")
+            return nothing
+        end
+
+        print_info("Building Rust installer...")
+        return build_installer(rust_dir, "Release")
+    elseif isdir(cpp_dir) && isfile(joinpath(cpp_dir, "CMakeLists.txt"))
+        # Legacy C++ path
+        print_warn("Rust installer source not found, trying legacy C++ build...")
+        return build_installer(cpp_dir, "Release")
+    else
+        print_warn("No installer source directory found")
         return nothing
     end
-
-    if !isfile(joinpath(installer_dir, "CMakeLists.txt"))
-        print_warn("CMakeLists.txt not found in installer directory")
-        return nothing
-    end
-
-    # Check build requirements before attempting build
-    missing_tools = String[]
-    if !success(`which cmake`)
-        push!(missing_tools, "cmake")
-    end
-    if !success(`which g++`)
-        push!(missing_tools, "g++ (base-devel)")
-    end
-
-    if !isempty(missing_tools)
-        println()
-        println("$(YELLOW)┌─────────────────────────────────────────────────────────────┐$(RESET)")
-        println("$(YELLOW)│  C++ 인스톨러를 빌드할 수 없습니다 (필수 도구 누락)         │$(RESET)")
-        println("$(YELLOW)├─────────────────────────────────────────────────────────────┤$(RESET)")
-        println("$(YELLOW)│$(RESET)  누락된 도구: $(RED)$(join(missing_tools, ", "))$(RESET)")
-        println("$(YELLOW)│$(RESET)  ")
-        println("$(YELLOW)│$(RESET)  설치 방법: $(GREEN)sudo pacman -S cmake base-devel$(RESET)")
-        println("$(YELLOW)│$(RESET)  ")
-        println("$(YELLOW)│$(RESET)  C++ 인스톨러 없이 archinstall을 사용합니다.")
-        println("$(YELLOW)│$(RESET)  archinstall 완료 후 config.toml 패키지가 자동 설치됩니다.")
-        println("$(YELLOW)└─────────────────────────────────────────────────────────────┘$(RESET)")
-        println()
-        return nothing
-    end
-
-    print_info("Building C++ installer...")
-    return build_installer(installer_dir, "Release")
 end
 
 """
@@ -358,8 +362,8 @@ function build_iso(config, args, aur_helper)
     println("    작업 디렉토리: $work_dir")
     println("    출력 디렉토리: $output_dir")
 
-    # Step 0: Build C++ installer
-    println("\n$(MAGENTA)[0/13]$(RESET) C++ 인스톨러 빌드 중...")
+    # Step 0: Build Rust installer (fallback: C++)
+    println("\n$(MAGENTA)[0/13]$(RESET) Rust 인스톨러 빌드 중...")
     installer_binary = build_installer_step()
 
     # Step 1: Initialize archiso profile
@@ -428,13 +432,13 @@ function build_iso(config, args, aur_helper)
     println("\n$(MAGENTA)[11/14]$(RESET) 부트 메뉴 설정 중...")
     configure_boot_menu(profile_dir)
 
-    # Step 12: Install C++ installer to profile
-    println("\n$(MAGENTA)[12/14]$(RESET) C++ 인스톨러 설치 중...")
+    # Step 12: Install Rust installer to profile
+    println("\n$(MAGENTA)[12/14]$(RESET) Rust 인스톨러 설치 중...")
     if installer_binary !== nothing
         install_installer_to_profile(installer_binary, profile_dir)
         copy_config_to_profile(config_file, profile_dir)
     else
-        print_warn("C++ installer not available, using archinstall fallback")
+        print_warn("Installer not available, using archinstall fallback")
     end
     # Always update the install script with preparation steps
     update_install_script_for_installer(profile_dir)
