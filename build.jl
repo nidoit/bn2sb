@@ -309,32 +309,59 @@ function build_installer_step()
     cpp_dir = joinpath(script_dir, "installer")
 
     if isdir(rust_dir) && isfile(joinpath(rust_dir, "Cargo.toml"))
-        # Try Rust build
+        # Try Rust build - auto-install toolchain if missing
         if !success(`which cargo`) || !success(`which rustc`)
             println()
             println("$(YELLOW)┌─────────────────────────────────────────────────────────────┐$(RESET)")
-            println("$(YELLOW)│  Rust 인스톨러를 빌드할 수 없습니다 (Rust 툴체인 누락)      │$(RESET)")
-            println("$(YELLOW)├─────────────────────────────────────────────────────────────┤$(RESET)")
-            println("$(YELLOW)│$(RESET)  설치 방법: $(GREEN)curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh$(RESET)")
-            println("$(YELLOW)│$(RESET)  또는: $(GREEN)sudo pacman -S rust$(RESET)")
-            println("$(YELLOW)│$(RESET)  ")
-            println("$(YELLOW)│$(RESET)  C++ 폴백 빌드를 시도합니다...")
+            println("$(YELLOW)│  Rust 툴체인 누락 - 자동 설치 중...                         │$(RESET)")
             println("$(YELLOW)└─────────────────────────────────────────────────────────────┘$(RESET)")
             println()
 
-            # Try C++ fallback
-            if isdir(cpp_dir) && isfile(joinpath(cpp_dir, "CMakeLists.txt"))
-                if success(`which cmake`) && success(`which g++`)
-                    print_info("Building legacy C++ installer (fallback)...")
-                    return build_installer(cpp_dir, "Release")
+            # Auto-install Rust toolchain via pacman (Arch Linux)
+            rust_installed = false
+            if success(`which pacman`)
+                print_info("pacman -S --noconfirm rust 설치 중...")
+                try
+                    run(`sudo pacman -S --noconfirm --needed rust`)
+                    rust_installed = true
+                    println("    $(GREEN)[✓]$(RESET) Rust 툴체인 설치 완료")
+                catch e
+                    println("    $(YELLOW)[!]$(RESET) pacman 설치 실패: $e")
                 end
             end
 
-            print_warn("No installer could be built. archinstall will be used as fallback.")
-            return nothing
+            # If pacman failed or not available, try rustup
+            if !rust_installed && !success(`which cargo`)
+                print_info("rustup으로 Rust 설치 시도 중...")
+                try
+                    run(pipeline(`curl --proto =https --tlsv1.2 -sSf https://sh.rustup.rs`,
+                                 `sh -s -- -y --default-toolchain stable`))
+                    # Add cargo to PATH for this session
+                    ENV["PATH"] = string(get(ENV, "HOME", "/root"), "/.cargo/bin:", ENV["PATH"])
+                    rust_installed = true
+                    println("    $(GREEN)[✓]$(RESET) Rust 툴체인 설치 완료 (rustup)")
+                catch e
+                    println("    $(RED)[✗]$(RESET) rustup 설치 실패: $e")
+                end
+            end
+
+            # If still no Rust, try C++ fallback
+            if !rust_installed && (!success(`which cargo`) || !success(`which rustc`))
+                println("    $(YELLOW)[!]$(RESET) Rust 설치 실패, C++ 폴백 빌드를 시도합니다...")
+
+                if isdir(cpp_dir) && isfile(joinpath(cpp_dir, "CMakeLists.txt"))
+                    if success(`which cmake`) && success(`which g++`)
+                        print_info("Building legacy C++ installer (fallback)...")
+                        return build_installer(cpp_dir, "Release")
+                    end
+                end
+
+                print_warn("No installer could be built. archinstall will be used as fallback.")
+                return nothing
+            end
         end
 
-        print_info("Building Rust installer...")
+        print_info("Rust 인스톨러 빌드 중...")
         return build_installer(rust_dir, "Release")
     elseif isdir(cpp_dir) && isfile(joinpath(cpp_dir, "CMakeLists.txt"))
         # Legacy C++ path
