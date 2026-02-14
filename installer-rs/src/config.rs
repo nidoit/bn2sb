@@ -160,7 +160,6 @@ pub struct InstallConfig {
     pub use_encryption: bool,
     pub encryption_password: String,
     pub bootloader: String,
-    pub uefi: bool,
     pub autologin: bool,
 }
 
@@ -175,7 +174,6 @@ impl Default for InstallConfig {
             use_encryption: false,
             encryption_password: String::new(),
             bootloader: "grub".to_string(),
-            uefi: true,
             autologin: true,
         }
     }
