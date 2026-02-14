@@ -286,6 +286,7 @@ Options=mode=0755
         "rtkit-daemon.service",       # RealtimeKit not needed for live ISO, fails without rtkit user
         "pcscd.socket",               # Smart card daemon not needed
         "pcscd.service",              # Smart card daemon not needed
+        "iwd.service",                # Conflicts with wpa_supplicant; NM uses wpa_supplicant as WiFi backend
     ]
 
     for service in services_to_mask
@@ -329,6 +330,7 @@ Options=mode=0755
     services_to_enable = [
         "pacman-init.service" => "/etc/systemd/system/pacman-init.service",
         "NetworkManager.service" => "/usr/lib/systemd/system/NetworkManager.service",
+        "wpa_supplicant.service" => "/usr/lib/systemd/system/wpa_supplicant.service",
         "sshd.service" => "/usr/lib/systemd/system/sshd.service",
         "ModemManager.service" => "/usr/lib/systemd/system/ModemManager.service",
     ]
@@ -375,9 +377,11 @@ disable systemd-vconsole-setup.service
 disable rtkit-daemon.service
 disable pcscd.socket
 disable pcscd.service
+disable iwd.service
 # Enable our services
 enable pacman-init.service
 enable NetworkManager.service
+enable wpa_supplicant.service
 enable sshd.service
 enable sddm.service
 enable bluetooth.service
@@ -426,6 +430,8 @@ enable polkit.service
 plugins=keyfile
 
 [device]
+# Use wpa_supplicant as WiFi backend (not iwd) to avoid conflicts
+wifi.backend=wpa_supplicant
 # Disable MAC randomization during WiFi scanning
 # Some adapters/drivers fail to scan with randomized MACs
 wifi.scan-rand-mac-address=no
