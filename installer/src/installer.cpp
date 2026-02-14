@@ -90,6 +90,10 @@ std::vector<std::string> Installer::get_base_packages() const {
         "vim",
         "networkmanager",
         "network-manager-applet",
+        // WiFi support (wpa_supplicant is required by NetworkManager for WiFi)
+        "wpa_supplicant",
+        "iwd",
+        "wireless_tools",
 
         // Bootloader
         "efibootmgr",

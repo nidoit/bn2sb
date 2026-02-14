@@ -185,6 +185,10 @@ impl Installer {
             "vim".to_string(),
             "networkmanager".to_string(),
             "network-manager-applet".to_string(),
+            // WiFi support (wpa_supplicant is required by NetworkManager for WiFi)
+            "wpa_supplicant".to_string(),
+            "iwd".to_string(),
+            "wireless_tools".to_string(),
             "efibootmgr".to_string(),
             "dosfstools".to_string(),
             "ntfs-3g".to_string(),
