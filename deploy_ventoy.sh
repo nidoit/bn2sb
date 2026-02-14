@@ -46,7 +46,7 @@ fi
 
 # Copy new ISO
 echo "복사 중... / Copying..."
-cp --progress "$LATEST_ISO" "$VENTOY_DIR/$ISO_NAME"
+rsync --progress "$LATEST_ISO" "$VENTOY_DIR/$ISO_NAME"
 sync
 
 echo ""
