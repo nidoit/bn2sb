@@ -398,20 +398,28 @@ impl Installer {
 
         // Enable essential services
         self.run_chroot("systemctl enable NetworkManager");
+        self.run_chroot("systemctl enable wpa_supplicant 2>/dev/null || true");
         self.run_chroot("systemctl enable bluetooth 2>/dev/null || true");
         self.run_chroot("systemctl enable sddm");
         self.run_chroot("systemctl enable cups 2>/dev/null || true");
+
+        // Mask conflicting network services (systemd-networkd conflicts with NM)
+        self.run_chroot("systemctl mask systemd-networkd.service 2>/dev/null || true");
+        self.run_chroot("systemctl mask systemd-networkd.socket 2>/dev/null || true");
+        self.run_chroot("systemctl mask systemd-networkd-wait-online.service 2>/dev/null || true");
+        // Disable iwd.service so it doesn't conflict with wpa_supplicant
+        self.run_chroot("systemctl mask iwd.service 2>/dev/null || true");
+
+        // =====================================================
+        // COMPLETE WIFI MANAGEMENT SETUP for installed system
+        // =====================================================
+        self.setup_wifi_management();
 
         // =====================================================
         // COPY WIFI CONNECTIONS from Live session to installed system
         // So the user stays connected after reboot
         // =====================================================
         self.copy_wifi_connections();
-
-        // =====================================================
-        // NETWORKMANAGER WIFI CONFIG for installed system
-        // =====================================================
-        self.configure_nm_wifi();
 
         // =====================================================
         // SWAP CONFIGURATION - Uses [disk] swap from config.toml
@@ -442,18 +450,86 @@ impl Installer {
         tui::print_info("Copied WiFi connections from live session to installed system");
     }
 
-    /// Configure NetworkManager WiFi settings for the installed system
-    fn configure_nm_wifi(&self) {
+    /// Complete WiFi management setup for the installed system
+    /// Sets up NetworkManager config, polkit rules, DNS, and wpa_supplicant
+    fn setup_wifi_management(&self) {
+        // ---------------------------------------------------
+        // 1. NetworkManager main configuration
+        // ---------------------------------------------------
         let nm_conf_dir = format!("{}/etc/NetworkManager/conf.d", self.mount_point);
         self.run_command(&format!("mkdir -p {nm_conf_dir}"));
 
-        let wifi_conf = "[device]\n\
-                         wifi.scan-rand-mac-address=no\n\
-                         \n\
-                         [connection]\n\
-                         wifi.cloned-mac-address=preserve\n";
+        // Main NM config: keyfile plugin + WiFi-friendly defaults
+        // wpa_supplicant is used automatically (iwd.service is masked)
+        let nm_main_conf = "\
+[main]\n\
+plugins=keyfile\n\
+\n\
+[device]\n\
+wifi.scan-rand-mac-address=no\n\
+\n\
+[connection]\n\
+wifi.cloned-mac-address=preserve\n\
+wifi.powersave=2\n";
 
-        self.write_file(&format!("{nm_conf_dir}/10-wifi.conf"), wifi_conf);
+        self.write_file(&format!("{nm_conf_dir}/10-blunux-wifi.conf"), nm_main_conf);
+
+        // ---------------------------------------------------
+        // 2. Polkit rules: allow wheel group to manage NetworkManager
+        //    Without this, plasma-nm WiFi button is grayed out
+        // ---------------------------------------------------
+        let polkit_dir = format!(
+            "{}/etc/polkit-1/rules.d",
+            self.mount_point
+        );
+        self.run_command(&format!("mkdir -p {polkit_dir}"));
+
+        let polkit_rules = "\
+/* Blunux: Allow wheel group to manage NetworkManager without password */\n\
+polkit.addRule(function(action, subject) {\n\
+    if (action.id.indexOf(\"org.freedesktop.NetworkManager.\") == 0 &&\n\
+        subject.isInGroup(\"wheel\")) {\n\
+        return polkit.Result.YES;\n\
+    }\n\
+});\n\
+\n\
+/* Allow wheel group to manage system-wide network settings */\n\
+polkit.addRule(function(action, subject) {\n\
+    if (action.id == \"org.freedesktop.NetworkManager.settings.modify.system\" &&\n\
+        subject.isInGroup(\"wheel\")) {\n\
+        return polkit.Result.YES;\n\
+    }\n\
+});\n";
+
+        self.write_file(
+            &format!("{polkit_dir}/49-blunux-networkmanager.rules"),
+            polkit_rules,
+        );
+
+        // ---------------------------------------------------
+        // 3. DNS fallback configuration
+        // ---------------------------------------------------
+        let resolv_conf = format!("{}/etc/resolv.conf", self.mount_point);
+        // Remove any symlink (systemd-resolved creates one)
+        self.run_command(&format!("rm -f {resolv_conf}"));
+        let dns_conf = "\
+# DNS configuration - managed by NetworkManager\n\
+# Fallback DNS servers (used until NM takes over)\n\
+nameserver 8.8.8.8\n\
+nameserver 1.1.1.1\n";
+        self.write_file(&resolv_conf, dns_conf);
+
+        // ---------------------------------------------------
+        // 4. Ensure system-connections directory exists
+        // ---------------------------------------------------
+        let nm_conn_dir = format!(
+            "{}/etc/NetworkManager/system-connections",
+            self.mount_point
+        );
+        self.run_command(&format!("mkdir -p {nm_conn_dir}"));
+        self.run_command(&format!("chmod 755 {nm_conn_dir}"));
+
+        tui::print_success("WiFi management configured (NetworkManager + wpa_supplicant + polkit)");
     }
 
     /// Configure swap based on [disk] swap setting from config.toml
@@ -716,9 +792,9 @@ impl Installer {
         );
         self.run_chroot(&format!("sh -c \"{root_cmd}\""));
 
-        // Create user
+        // Create user (network group for WiFi/NM management)
         self.run_chroot(&format!(
-            "useradd -m -G wheel,audio,video,storage,optical -s /bin/bash {}",
+            "useradd -m -G wheel,audio,video,storage,optical,network,power,input -s /bin/bash {}",
             self.config.install.username
         ));
 
