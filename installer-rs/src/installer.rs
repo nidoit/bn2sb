@@ -398,8 +398,20 @@ impl Installer {
 
         // Enable essential services
         self.run_chroot("systemctl enable NetworkManager");
+        self.run_chroot("systemctl enable bluetooth 2>/dev/null || true");
         self.run_chroot("systemctl enable sddm");
         self.run_chroot("systemctl enable cups 2>/dev/null || true");
+
+        // =====================================================
+        // COPY WIFI CONNECTIONS from Live session to installed system
+        // So the user stays connected after reboot
+        // =====================================================
+        self.copy_wifi_connections();
+
+        // =====================================================
+        // NETWORKMANAGER WIFI CONFIG for installed system
+        // =====================================================
+        self.configure_nm_wifi();
 
         // =====================================================
         // SWAP CONFIGURATION - Uses [disk] swap from config.toml
@@ -408,6 +420,40 @@ impl Installer {
         self.setup_swap();
 
         true
+    }
+
+    /// Copy WiFi connections from the live session to the installed system
+    /// This ensures the user's WiFi connection persists after reboot
+    fn copy_wifi_connections(&self) {
+        let live_nm_dir = "/etc/NetworkManager/system-connections";
+        let target_nm_dir = format!("{}/etc/NetworkManager/system-connections", self.mount_point);
+
+        // Create target directory
+        self.run_command(&format!("mkdir -p {target_nm_dir}"));
+
+        // Copy all connection files from live session
+        self.run_command(&format!(
+            "cp -f {live_nm_dir}/*.nmconnection {target_nm_dir}/ 2>/dev/null || true"
+        ));
+
+        // Fix permissions (NM requires 600 for connection files)
+        self.run_command(&format!("chmod 600 {target_nm_dir}/*.nmconnection 2>/dev/null || true"));
+
+        tui::print_info("Copied WiFi connections from live session to installed system");
+    }
+
+    /// Configure NetworkManager WiFi settings for the installed system
+    fn configure_nm_wifi(&self) {
+        let nm_conf_dir = format!("{}/etc/NetworkManager/conf.d", self.mount_point);
+        self.run_command(&format!("mkdir -p {nm_conf_dir}"));
+
+        let wifi_conf = "[device]\n\
+                         wifi.scan-rand-mac-address=no\n\
+                         \n\
+                         [connection]\n\
+                         wifi.cloned-mac-address=preserve\n";
+
+        self.write_file(&format!("{nm_conf_dir}/10-wifi.conf"), wifi_conf);
     }
 
     /// Configure swap based on [disk] swap setting from config.toml
