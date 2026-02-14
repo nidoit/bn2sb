@@ -1025,13 +1025,23 @@ HOME_URL="https://archlinux.org/"
 DOCUMENTATION_URL="https://wiki.archlinux.org/"
 SUPPORT_URL="https://bbs.archlinux.org/"
 BUG_REPORT_URL="https://bugs.archlinux.org/"
-LOGO=archlinux-logo
+LOGO=blunux
 """)
     end
 
     # Also create symlink /usr/lib/os-release -> /etc/os-release (standard location)
     usr_lib_dir = joinpath(airootfs_dir, "usr", "lib")
     mkpath(usr_lib_dir)
+
+    # Install Blunux logo icon for KDE "About This System" and other desktop tools
+    script_dir = dirname(dirname(@__FILE__))
+    logo_src = joinpath(script_dir, "logo.png")
+    if isfile(logo_src)
+        pixmaps_dir = joinpath(airootfs_dir, "usr", "share", "pixmaps")
+        mkpath(pixmaps_dir)
+        cp(logo_src, joinpath(pixmaps_dir, "blunux.png"), force=true)
+        println("    Installed Blunux logo to /usr/share/pixmaps/blunux.png")
+    end
 
     # Create fastfetch config directory for live user
     fastfetch_config_dir = joinpath(airootfs_dir, "home", "live", ".config", "fastfetch")

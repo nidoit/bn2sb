@@ -747,6 +747,13 @@ copy_blunux_osrelease() {
         mkdir -p "$mount_point/usr/lib"
         cp /etc/os-release "$mount_point/usr/lib/os-release"
 
+        # Copy Blunux logo icon (used by KDE "About This System" via LOGO= in os-release)
+        if [ -f /usr/share/pixmaps/blunux.png ]; then
+            mkdir -p "$mount_point/usr/share/pixmaps"
+            cp /usr/share/pixmaps/blunux.png "$mount_point/usr/share/pixmaps/blunux.png"
+            echo -e "${GREEN}[완료]${RESET} Blunux 로고 아이콘 복사 완료"
+        fi
+
         echo -e "${GREEN}[완료]${RESET} OS 브랜딩 (os-release) 복사 완료"
     else
         echo -e "${YELLOW}[경고]${RESET} /etc/os-release를 찾을 수 없습니다"

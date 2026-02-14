@@ -1018,6 +1018,17 @@ nameserver 1.1.1.1\n";
                 self.mount_point
             ));
         }
+        // Copy Blunux logo icon (used by KDE "About This System" via LOGO= in os-release)
+        if self.run_command("test -f /usr/share/pixmaps/blunux.png") {
+            self.run_command(&format!(
+                "mkdir -p {}/usr/share/pixmaps",
+                self.mount_point
+            ));
+            self.run_command(&format!(
+                "cp /usr/share/pixmaps/blunux.png {}/usr/share/pixmaps/blunux.png",
+                self.mount_point
+            ));
+        }
         tui::print_success("Blunux branding configured");
 
         // 2. Create package installation script
