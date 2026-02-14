@@ -342,6 +342,35 @@ Options=mode=0755
     end
 
     # =====================================================
+    # 4b. Create WiFi rfkill unblock service
+    # =====================================================
+    # Some laptops have WiFi soft-blocked by default; unblock it and
+    # ensure NetworkManager has WiFi radio enabled at boot
+    wifi_unblock_service = joinpath(systemd_dir, "blunux-wifi-unblock.service")
+    open(wifi_unblock_service, "w") do f
+        print(f, raw"""
+[Unit]
+Description=Unblock WiFi and enable NM radio
+After=NetworkManager.service
+Wants=NetworkManager.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/rfkill unblock wifi
+ExecStart=/usr/bin/nmcli radio wifi on
+
+[Install]
+WantedBy=multi-user.target
+""")
+    end
+
+    # Enable the WiFi unblock service
+    wifi_unblock_link = joinpath(multi_user_wants, "blunux-wifi-unblock.service")
+    rm(wifi_unblock_link, force=true)
+    symlink("/etc/systemd/system/blunux-wifi-unblock.service", wifi_unblock_link)
+
+    # =====================================================
     # 5. Create getty autologin for root on tty1
     # =====================================================
     getty_dir = joinpath(systemd_dir, "getty@tty1.service.d")
@@ -387,6 +416,7 @@ enable sddm.service
 enable bluetooth.service
 enable ModemManager.service
 enable polkit.service
+enable blunux-wifi-unblock.service
 """)
     end
 
@@ -460,12 +490,28 @@ wifi.powersave=2
     # Create a basic polkit rule for live ISO (allow wheel group to do admin tasks)
     polkit_rule = joinpath(polkit_rules_dir, "49-blunux-live.rules")
     open(polkit_rule, "w") do f
-        print(f, raw"""
-/* Blunux Live ISO polkit rules */
+        print(f, """/* Blunux Live ISO polkit rules */
 /* Allow users in wheel group to perform admin tasks without password */
 polkit.addRule(function(action, subject) {
     if (subject.isInGroup("wheel")) {
         return polkit.Result.YES;
+    }
+});
+""")
+    end
+
+    # Create NetworkManager-specific polkit rule (also allow 'network' group)
+    # This ensures WiFi Connect button appears in plasma-nm even if
+    # wheel group membership hasn't propagated to the session yet
+    nm_polkit_rule = joinpath(polkit_rules_dir, "48-blunux-networkmanager.rules")
+    open(nm_polkit_rule, "w") do f
+        print(f, """/* Blunux NetworkManager polkit rules */
+/* Allow network group and local active sessions to manage NetworkManager */
+polkit.addRule(function(action, subject) {
+    if (action.id.indexOf("org.freedesktop.NetworkManager.") == 0) {
+        if (subject.isInGroup("network") || subject.isInGroup("wheel") || subject.local || subject.active) {
+            return polkit.Result.YES;
+        }
     }
 });
 """)

@@ -196,6 +196,7 @@ const BASE_PACKAGES = [
     "wpa_supplicant",
     "iwd",                       # Modern WiFi daemon (provides iwctl)
     "wireless_tools",            # Classic WiFi utilities (iwconfig, iwlist)
+    "wireless-regdb",            # Wireless regulatory domain database (required for proper WiFi)
     "dhcpcd",                    # DHCP client (fallback network)
     "nano",
     "vim",
