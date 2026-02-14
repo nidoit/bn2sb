@@ -413,6 +413,38 @@ enable polkit.service
     end
 
     # =====================================================
+    # 9b. Configure NetworkManager for reliable WiFi
+    # =====================================================
+    nm_conf_dir = joinpath(etc_dir, "NetworkManager", "conf.d")
+    mkpath(nm_conf_dir)
+
+    # WiFi-specific config
+    nm_wifi_conf = joinpath(nm_conf_dir, "10-blunux-wifi.conf")
+    open(nm_wifi_conf, "w") do f
+        print(f, raw"""
+[main]
+plugins=keyfile
+
+[device]
+# Disable MAC randomization during WiFi scanning
+# Some adapters/drivers fail to scan with randomized MACs
+wifi.scan-rand-mac-address=no
+
+[connection]
+# Use stable WiFi interface names
+wifi.cloned-mac-address=preserve
+# Disable power saving (prevents disconnects in live session)
+wifi.powersave=2
+""")
+    end
+
+    # Ensure system-connections directory exists for WiFi profiles
+    nm_connections_dir = joinpath(etc_dir, "NetworkManager", "system-connections")
+    mkpath(nm_connections_dir)
+
+    println("    Configured NetworkManager WiFi settings")
+
+    # =====================================================
     # 10. Configure polkit directories with proper permissions
     # =====================================================
     # polkit.service fails if these directories don't exist or have wrong permissions
