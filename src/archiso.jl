@@ -1025,13 +1025,23 @@ HOME_URL="https://archlinux.org/"
 DOCUMENTATION_URL="https://wiki.archlinux.org/"
 SUPPORT_URL="https://bbs.archlinux.org/"
 BUG_REPORT_URL="https://bugs.archlinux.org/"
-LOGO=archlinux-logo
+LOGO=blunux
 """)
     end
 
     # Also create symlink /usr/lib/os-release -> /etc/os-release (standard location)
     usr_lib_dir = joinpath(airootfs_dir, "usr", "lib")
     mkpath(usr_lib_dir)
+
+    # Install Blunux logo icon for KDE "About This System" and other desktop tools
+    script_dir = dirname(dirname(@__FILE__))
+    logo_src = joinpath(script_dir, "logo.png")
+    if isfile(logo_src)
+        pixmaps_dir = joinpath(airootfs_dir, "usr", "share", "pixmaps")
+        mkpath(pixmaps_dir)
+        cp(logo_src, joinpath(pixmaps_dir, "blunux.png"), force=true)
+        println("    Installed Blunux logo to /usr/share/pixmaps/blunux.png")
+    end
 
     # Create fastfetch config directory for live user
     fastfetch_config_dir = joinpath(airootfs_dir, "home", "live", ".config", "fastfetch")
@@ -1149,6 +1159,28 @@ This function completely replaces all bootloader configurations from archiso rel
 """
 function configure_boot_menu(profile_dir)
     # =====================================================
+    # Copy Blunux logo to bootloader directories
+    # =====================================================
+    script_dir = dirname(dirname(@__FILE__))
+    logo_src = joinpath(script_dir, "logo.png")
+    if isfile(logo_src)
+        for subdir in ["grub", "syslinux"]
+            dest_dir = joinpath(profile_dir, subdir)
+            if isdir(dest_dir)
+                cp(logo_src, joinpath(dest_dir, "logo.png"), force=true)
+                # Remove old Arch Linux splash if present
+                old_splash = joinpath(dest_dir, "splash.png")
+                if isfile(old_splash)
+                    rm(old_splash, force=true)
+                end
+            end
+        end
+        println("    Copied Blunux logo to bootloader directories")
+    else
+        @warn "logo.png not found at $logo_src — boot menus will have no background"
+    end
+
+    # =====================================================
     # GRUB Configuration (BIOS and UEFI)
     # =====================================================
     grub_dir = joinpath(profile_dir, "grub")
@@ -1169,6 +1201,7 @@ insmod exfat
 insmod udf
 insmod all_video
 insmod font
+insmod png
 
 set default="blunux-live"
 set timeout=10
@@ -1182,10 +1215,17 @@ if loadfont "${prefix}/fonts/unicode.pf2" ; then
     set gfxterm_font=unicode
 fi
 
-set color_normal=white/black
-set color_highlight=cyan/black
-set menu_color_normal=white/black
-set menu_color_highlight=cyan/black
+if background_image "${prefix}/logo.png" ; then
+    set color_normal=dark-gray/black
+    set color_highlight=white/blue
+    set menu_color_normal=dark-gray/black
+    set menu_color_highlight=white/blue
+else
+    set color_normal=white/black
+    set color_highlight=cyan/black
+    set menu_color_normal=white/black
+    set menu_color_highlight=cyan/black
+fi
 
 menuentry "Blunux Live" --class arch --class gnu-linux --class os --id 'blunux-live' {
     set gfxpayload=keep
@@ -1258,16 +1298,18 @@ TIMEOUT 100
 UI vesamenu.c32
 
 MENU TITLE Blunux Boot Menu
-MENU RESOLUTION 1024 768
-MENU COLOR border       30;44   #40ffffff #a0000000 std
-MENU COLOR title        1;36;44 #9033ccff #a0000000 std
-MENU COLOR sel          7;37;40 #e0ffffff #20ffffff all
-MENU COLOR unsel        37;44   #50ffffff #a0000000 std
-MENU COLOR help         37;40   #c0ffffff #a0000000 std
-MENU COLOR timeout      1;37;40 #c0ffffff #00000000 std
-MENU COLOR timeout_msg  37;40   #80ffffff #00000000 std
-MENU COLOR hotsel       1;7;37;40 #e0ffffff #20ffffff all
-MENU COLOR hotkey       37;44   #90ffff00 #a0000000 std
+MENU RESOLUTION 640 480
+MENU BACKGROUND logo.png
+MENU COLOR screen       37;40   #00000000 #ffffffff std
+MENU COLOR border       30;44   #00000000 #00000000 std
+MENU COLOR title        1;36;44 #ff1a5fb4 #00000000 std
+MENU COLOR sel          7;37;40 #ffffffff #ff1a5fb4 all
+MENU COLOR unsel        37;44   #ff333333 #00000000 std
+MENU COLOR help         37;40   #ff555555 #00000000 std
+MENU COLOR timeout      1;37;40 #ff1a5fb4 #00000000 std
+MENU COLOR timeout_msg  37;40   #ff555555 #00000000 std
+MENU COLOR hotsel       1;7;37;40 #ffffffff #ff1a5fb4 all
+MENU COLOR hotkey       37;44   #ff1a5fb4 #00000000 std
 
 LABEL blunux-live
     TEXT HELP
