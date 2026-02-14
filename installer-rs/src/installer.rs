@@ -196,6 +196,8 @@ impl Installer {
             "vulkan-icd-loader".to_string(),
             // Hardware detection
             "pciutils".to_string(),
+            // Console font (required by systemd-vconsole-setup.service)
+            "terminus-font".to_string(),
             "noto-fonts".to_string(),
             "noto-fonts-cjk".to_string(),
             "noto-fonts-emoji".to_string(),
@@ -619,13 +621,20 @@ impl Installer {
             &locale_conf,
         );
 
-        if let Some(kb) = self.config.locale.keyboards.first() {
-            let vconsole = format!("KEYMAP={kb}\n");
-            self.write_file(
-                &format!("{}/etc/vconsole.conf", self.mount_point),
-                &vconsole,
-            );
-        }
+        // Always write vconsole.conf with KEYMAP and FONT
+        // Missing FONT causes systemd-vconsole-setup.service to fail at boot
+        let keymap = self
+            .config
+            .locale
+            .keyboards
+            .first()
+            .cloned()
+            .unwrap_or_else(|| "us".to_string());
+        let vconsole = format!("KEYMAP={keymap}\nFONT=ter-v16n\n");
+        self.write_file(
+            &format!("{}/etc/vconsole.conf", self.mount_point),
+            &vconsole,
+        );
 
         true
     }
