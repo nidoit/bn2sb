@@ -90,6 +90,10 @@ std::vector<std::string> Installer::get_base_packages() const {
         "vim",
         "networkmanager",
         "network-manager-applet",
+        // WiFi support (wpa_supplicant is required by NetworkManager for WiFi)
+        "wpa_supplicant",
+        "iwd",
+        "wireless_tools",
 
         // Bootloader
         "efibootmgr",
@@ -109,6 +113,9 @@ std::vector<std::string> Installer::get_base_packages() const {
 
         // Hardware detection
         "pciutils",
+
+        // Console font (required by systemd-vconsole-setup.service)
+        "terminus-font",
 
         // Fonts (base)
         "noto-fonts",
@@ -579,11 +586,11 @@ bool Installer::configure_locale() {
     std::string locale_conf = "LANG=" + default_lang + ".UTF-8\n";
     write_file(mount_point_ + "/etc/locale.conf", locale_conf);
 
-    // Configure keyboard
-    if (!config_.locale.keyboards.empty()) {
-        std::string vconsole = "KEYMAP=" + config_.locale.keyboards[0] + "\n";
-        write_file(mount_point_ + "/etc/vconsole.conf", vconsole);
-    }
+    // Always write vconsole.conf with KEYMAP and FONT
+    // Missing FONT causes systemd-vconsole-setup.service to fail at boot
+    std::string keymap = config_.locale.keyboards.empty() ? "us" : config_.locale.keyboards[0];
+    std::string vconsole = "KEYMAP=" + keymap + "\nFONT=ter-v16n\n";
+    write_file(mount_point_ + "/etc/vconsole.conf", vconsole);
 
     return true;
 }
