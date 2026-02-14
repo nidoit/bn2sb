@@ -68,7 +68,6 @@ pub fn get_disks() -> Vec<tui::DiskInfo> {
             device: format!("/dev/{name}"),
             size: size.to_string(),
             model,
-            type_: type_.to_string(),
         });
     }
 
@@ -281,18 +280,6 @@ pub fn unmount_partitions(mount_point: &str) -> bool {
     run_cmd(&format!("umount -R {mount_point} 2>/dev/null"));
     run_cmd("cryptsetup close cryptroot 2>/dev/null");
     true
-}
-
-/// Get disk size in human-readable format
-pub fn get_disk_size(device: &str) -> String {
-    let output = exec(&format!("lsblk -d -n -o SIZE {device} 2>/dev/null"));
-    output.trim().to_string()
-}
-
-/// Check if disk has partitions
-pub fn has_partitions(device: &str) -> bool {
-    let output = exec(&format!("lsblk -n -o TYPE {device} 2>/dev/null"));
-    output.contains("part")
 }
 
 /// Generate fstab

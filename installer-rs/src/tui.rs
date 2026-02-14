@@ -15,7 +15,6 @@ pub struct DiskInfo {
     pub device: String,
     pub model: String,
     pub size: String,
-    pub type_: String,
 }
 
 pub fn print_banner() {
