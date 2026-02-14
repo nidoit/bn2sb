@@ -67,7 +67,7 @@ impl Installer {
 
     /// Run the full installation
     pub fn install(&mut self) -> bool {
-        let total_steps = 9;
+        let total_steps = 10;
 
         // Step 1: Prepare disk
         tui::print_step(1, total_steps, "Preparing disk / 디스크 준비 중...");
@@ -94,14 +94,18 @@ impl Installer {
             return false;
         }
 
-        // Step 5: Install packages
-        tui::print_step(5, total_steps, "Installing packages / 패키지 설치 중...");
+        // Step 5: Detect and install hardware drivers
+        tui::print_step(5, total_steps, "Detecting hardware drivers / 하드웨어 드라이버 감지 중...");
+        self.detect_and_install_drivers();
+
+        // Step 6: Install packages
+        tui::print_step(6, total_steps, "Installing packages / 패키지 설치 중...");
         if !self.install_packages() {
             return false;
         }
 
-        // Step 6: Configure locale and input method
-        tui::print_step(6, total_steps, "Configuring locale / 로케일 설정 중...");
+        // Step 7: Configure locale and input method
+        tui::print_step(7, total_steps, "Configuring locale / 로케일 설정 중...");
         if !self.configure_locale() {
             return false;
         }
@@ -109,20 +113,20 @@ impl Installer {
             return false;
         }
 
-        // Step 7: Configure users
-        tui::print_step(7, total_steps, "Configuring users / 사용자 설정 중...");
+        // Step 8: Configure users
+        tui::print_step(8, total_steps, "Configuring users / 사용자 설정 중...");
         if !self.configure_users() {
             return false;
         }
 
-        // Step 8: Install bootloader
-        tui::print_step(8, total_steps, "Installing bootloader / 부트로더 설치 중...");
+        // Step 9: Install bootloader
+        tui::print_step(9, total_steps, "Installing bootloader / 부트로더 설치 중...");
         if !self.install_bootloader() {
             return false;
         }
 
-        // Step 9: Finalize
-        tui::print_step(9, total_steps, "Finalizing / 마무리 중...");
+        // Step 10: Finalize
+        tui::print_step(10, total_steps, "Finalizing / 마무리 중...");
         if !self.finalize() {
             return false;
         }
@@ -187,6 +191,11 @@ impl Installer {
             "btrfs-progs".to_string(),
             "intel-ucode".to_string(),
             "amd-ucode".to_string(),
+            // GPU base drivers (always needed)
+            "mesa".to_string(),
+            "vulkan-icd-loader".to_string(),
+            // Hardware detection
+            "pciutils".to_string(),
             "noto-fonts".to_string(),
             "noto-fonts-cjk".to_string(),
             "noto-fonts-emoji".to_string(),
@@ -467,6 +476,121 @@ impl Installer {
     fn install_packages(&self) -> bool {
         // Additional packages from config (already done in base system)
         true
+    }
+
+    /// Detect hardware via lspci and install appropriate GPU/WiFi drivers
+    fn detect_and_install_drivers(&self) {
+        // Read lspci output from the host (hardware is the same)
+        let lspci_output = self.exec_output("lspci -nn 2>/dev/null");
+        let lspci_lower = lspci_output.to_lowercase();
+
+        let mut driver_packages: Vec<String> = Vec::new();
+
+        // ── GPU Detection ──────────────────────────────────────
+        let has_nvidia = lspci_lower.contains("nvidia");
+        let has_amd_gpu = lspci_lower.contains("[amd/ati]")
+            || lspci_lower.contains("radeon")
+            || (lspci_lower.contains("amd") && lspci_lower.contains("vga"));
+        let has_intel_gpu = lspci_lower.contains("intel")
+            && (lspci_lower.contains("vga") || lspci_lower.contains("display"));
+
+        if has_nvidia {
+            tui::print_info("Detected NVIDIA GPU - installing drivers...");
+            driver_packages.extend_from_slice(&[
+                "nvidia".to_string(),
+                "nvidia-utils".to_string(),
+                "nvidia-settings".to_string(),
+                "lib32-nvidia-utils".to_string(),
+                "libva-nvidia-driver".to_string(),
+            ]);
+        }
+
+        if has_amd_gpu {
+            tui::print_info("Detected AMD/ATI GPU - installing drivers...");
+            driver_packages.extend_from_slice(&[
+                "xf86-video-amdgpu".to_string(),
+                "vulkan-radeon".to_string(),
+                "lib32-vulkan-radeon".to_string(),
+                "libva-mesa-driver".to_string(),
+                "lib32-libva-mesa-driver".to_string(),
+                "mesa-vdpau".to_string(),
+            ]);
+        }
+
+        if has_intel_gpu {
+            tui::print_info("Detected Intel GPU - installing drivers...");
+            driver_packages.extend_from_slice(&[
+                "vulkan-intel".to_string(),
+                "lib32-vulkan-intel".to_string(),
+                "intel-media-driver".to_string(),
+            ]);
+        }
+
+        if !has_nvidia && !has_amd_gpu && !has_intel_gpu {
+            tui::print_info("No dedicated GPU detected - using mesa software rendering");
+        }
+
+        // ── WiFi / Network Detection ───────────────────────────
+        let has_broadcom = lspci_lower.contains("broadcom")
+            && (lspci_lower.contains("wireless") || lspci_lower.contains("network")
+                || lspci_lower.contains("bcm43"));
+
+        if has_broadcom {
+            tui::print_info("Detected Broadcom wireless - installing driver...");
+            driver_packages.push("broadcom-wl-dkms".to_string());
+        }
+
+        let has_realtek_wifi = lspci_lower.contains("realtek")
+            && (lspci_lower.contains("wireless") || lspci_lower.contains("rtl8"));
+
+        if has_realtek_wifi {
+            tui::print_info("Detected Realtek wireless - linux-firmware should cover it");
+            // Most Realtek chips are covered by linux-firmware
+            // rtw88/rtw89 drivers are in-kernel since linux 6.x
+        }
+
+        // ── Install detected driver packages ───────────────────
+        if !driver_packages.is_empty() {
+            let pkg_list = driver_packages.join(" ");
+            tui::print_info(&format!("Installing hardware drivers: {}", driver_packages.len()));
+
+            // Install via pacman in chroot
+            let cmd = format!("pacman -S --noconfirm --needed {pkg_list}");
+            if self.run_chroot(&cmd) {
+                tui::print_success("Hardware drivers installed successfully");
+            } else {
+                tui::print_warning("Some driver packages may have failed - system should still work");
+            }
+        } else {
+            tui::print_success("Base GPU drivers (mesa) already included");
+        }
+
+        // ── Enable multilib repository for 32-bit libs ─────────
+        let has_32bit = driver_packages.iter().any(|p| p.starts_with("lib32-"));
+        if has_32bit {
+            let pacman_conf = format!("{}/etc/pacman.conf", self.mount_point);
+            let conf_content = self.exec_output(&format!("cat {pacman_conf}"));
+            if !conf_content.contains("[multilib]") || conf_content.contains("#[multilib]") {
+                tui::print_info("Enabling multilib repository for 32-bit driver support...");
+                self.run_chroot(
+                    "sed -i '/^#\\[multilib\\]/,/^#Include/ s/^#//' /etc/pacman.conf",
+                );
+                self.run_chroot("pacman -Sy --noconfirm");
+                // Retry 32-bit packages after enabling multilib
+                let lib32_pkgs: Vec<&str> = driver_packages
+                    .iter()
+                    .filter(|p| p.starts_with("lib32-"))
+                    .map(|s| s.as_str())
+                    .collect();
+                if !lib32_pkgs.is_empty() {
+                    let cmd = format!(
+                        "pacman -S --noconfirm --needed {}",
+                        lib32_pkgs.join(" ")
+                    );
+                    self.run_chroot(&cmd);
+                }
+            }
+        }
     }
 
     fn configure_locale(&self) -> bool {
