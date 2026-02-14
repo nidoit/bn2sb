@@ -49,8 +49,13 @@ echo "복사 중... / Copying..."
 rsync --progress "$LATEST_ISO" "$VENTOY_DIR/$ISO_NAME"
 sync
 
+# Unmount Ventoy USB
+echo "USB 마운트 해제 중... / Unmounting Ventoy USB..."
+umount "$VENTOY_DIR" 2>/dev/null && echo "USB를 안전하게 제거할 수 있습니다." || echo "마운트 해제 실패 - 수동으로 해제하세요."
+
 echo ""
 echo "========================================"
 echo "  완료! / Done!"
 echo "  $ISO_NAME → Ventoy USB"
+echo "  USB를 제거하세요 / Safe to remove USB"
 echo "========================================"
