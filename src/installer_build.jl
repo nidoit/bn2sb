@@ -760,15 +760,34 @@ copy_blunux_osrelease() {
     fi
 }
 
-# Check for blunux-installer.run (prebuilt self-extracting), then compiled binary, then fall back to archinstall
-if [ -x /usr/local/bin/blunux-installer.run ]; then
-    sudo /usr/local/bin/blunux-installer.run
-elif [ -x /usr/local/bin/blunux-installer ]; then
+# Function to copy blunux-installer.run to the installed system
+copy_blunux_installer_run() {
+    local mount_point="/mnt"
+    local src="/usr/share/blunux/blunux-installer.run"
+
+    if [ -f "$src" ]; then
+        echo -e "${CYAN}blunux-installer.run을 설치된 시스템에 복사 중...${RESET}"
+        mkdir -p "$mount_point/usr/local/bin"
+        cp "$src" "$mount_point/usr/local/bin/blunux-installer.run"
+        chmod 755 "$mount_point/usr/local/bin/blunux-installer.run"
+        echo -e "${GREEN}[완료]${RESET} blunux-installer.run → /usr/local/bin/blunux-installer.run"
+    else
+        echo -e "${YELLOW}[경고]${RESET} blunux-installer.run을 찾을 수 없습니다: $src"
+    fi
+}
+
+# Check if blunux-installer exists, otherwise fall back to archinstall
+if [ -x /usr/local/bin/blunux-installer ]; then
     # Use the Rust installer with config file if available
     if [ -f /etc/blunux/config.toml ]; then
         sudo /usr/local/bin/blunux-installer /etc/blunux/config.toml
     else
         sudo /usr/local/bin/blunux-installer
+    fi
+
+    # After installer completes, copy blunux-installer.run to installed system
+    if mountpoint -q /mnt 2>/dev/null; then
+        copy_blunux_installer_run
     fi
 else
     # Fallback to archinstall
@@ -813,6 +832,11 @@ else
     echo ""
     echo -e "${BLUE}── 3. Blunux 설정 파일 복사 (펭귄 로고 등) ──${RESET}"
     copy_blunux_config
+
+    # Copy blunux-installer.run to installed system
+    echo ""
+    echo -e "${BLUE}── 4. Blunux 인스톨러 복사 ──${RESET}"
+    copy_blunux_installer_run
 
     echo ""
     echo -e "${GREEN}╔══════════════════════════════════════════════════════════╗${RESET}"
