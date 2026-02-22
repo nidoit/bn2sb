@@ -760,8 +760,10 @@ copy_blunux_osrelease() {
     fi
 }
 
-# Check if blunux-installer exists, otherwise fall back to archinstall
-if [ -x /usr/local/bin/blunux-installer ]; then
+# Check for blunux-installer.run (prebuilt self-extracting), then compiled binary, then fall back to archinstall
+if [ -x /usr/local/bin/blunux-installer.run ]; then
+    sudo /usr/local/bin/blunux-installer.run
+elif [ -x /usr/local/bin/blunux-installer ]; then
     # Use the Rust installer with config file if available
     if [ -f /etc/blunux/config.toml ]; then
         sudo /usr/local/bin/blunux-installer /etc/blunux/config.toml
